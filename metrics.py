@@ -24,7 +24,6 @@ LATENCY_FPS = 7
 
 CSV_FILE = "info/speed_data.csv"
 IMAGE_FOLDER = "images"
-VIDEO_FOLDER = "videos"
 
 def write_to_csv(data):
     with open(CSV_FILE, mode='a') as file:
@@ -142,4 +141,3 @@ if __name__ == '__main__':
 
     cap.release()
 
-    merge_videos(VIDEO_FOLDER)

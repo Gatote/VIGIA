@@ -1,11 +1,12 @@
 import cv2
 import numpy as np
-from datetime import datetime
-from ultralytics import YOLO
-from sort import Sort
+import base64
 import csv
 import os
 import uuid
+from datetime import datetime
+from ultralytics import YOLO
+from sort import Sort
 
 BLUE_LINE = [(450, 350), (850, 350)]
 GREEN_LINE = [(400, 400), (900, 400)]
@@ -26,9 +27,9 @@ CSV_FILE = "info/speed_data.csv"
 IMAGE_FOLDER = "images"
 
 def write_to_csv(data):
-    with open(CSV_FILE, mode='a') as file:
+    with open(CSV_FILE, mode='a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerows(data)
+        writer.writerow(data)
 
 def euclidean_distance(point1: tuple, point2: tuple):
     x1, y1 = point1
@@ -48,13 +49,9 @@ def calculate_avg_speed(track_id):
     return round((speed_bg + speed_gr) / 2, 2)
 
 def save_image(frame, vehicle_id):
-    if not os.path.exists(IMAGE_FOLDER):
-        os.makedirs(IMAGE_FOLDER)
-
-    image_name = f"{vehicle_id}_{uuid.uuid4()}.jpg"
-    image_path = os.path.join(IMAGE_FOLDER, image_name)
-    cv2.imwrite(image_path, frame)
-    return image_name
+    _, buffer = cv2.imencode('.jpg', frame)
+    img_str = base64.b64encode(buffer).decode('utf-8')
+    return img_str
 
 if __name__ == '__main__':
     cap = cv2.VideoCapture("films/traffic4.mp4")
@@ -66,9 +63,9 @@ if __name__ == '__main__':
     if not os.path.exists(IMAGE_FOLDER):
         os.makedirs(IMAGE_FOLDER)
 
-    with open(CSV_FILE, mode='w') as file:
+    with open(CSV_FILE, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Vehicle Name', 'Vehicle ID', 'Speed (Km/h)', 'Image Name'])
+        writer.writerow(['Vehicle Name', 'Vehicle ID', 'Speed (Km/h)', 'Image'])
 
     start_time = None
     while cap.isOpened():
@@ -113,25 +110,11 @@ if __name__ == '__main__':
                         cross_red_line[track_id] = {"time": datetime.now(), "point": (xc, yc)}
                         avg_speed = calculate_avg_speed(track_id)
                         avg_speeds[track_id] = f"{avg_speed} Km/h"
-                        data_to_write.append([vehicle_names[track_id], track_id, avg_speed])
+                        data_to_write.append([vehicle_names[track_id], track_id, avg_speed, save_image(frame, track_id)])
 
-                if track_id in avg_speeds:
-                    cv2.putText(img=frame, text=f"Name: {vehicle_names[track_id]}, Speed: {avg_speeds[track_id]}", org=(xmin, ymin - 10), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0, 255, 0), thickness=2)
-
-                cv2.circle(img=frame, center=(xc, yc), radius=5, color=(0, 255, 0), thickness=-1)
                 cv2.rectangle(img=frame, pt1=(xmin, ymin), pt2=(xmax, ymax), color=(255, 255, 0), thickness=2)
 
-
-        write_to_csv(data_to_write)
-
-        cv2.line(frame, BLUE_LINE[0], BLUE_LINE[1], (255, 0, 0), 3)
-        cv2.line(frame, GREEN_LINE[0], GREEN_LINE[1], (0, 255, 0), 3)
-        cv2.line(frame, RED_LINE[0], RED_LINE[1], (0, 0, 255), 3)
-
-        cv2.imshow("frame", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        for data in data_to_write:
+            write_to_csv(data)
 
     cap.release()
-

@@ -1,0 +1,6 @@
+# Ignorar archivos de configuración específicos de Python
+*.pyc
+__pycache__/
+
+# Ignorar archivos generados por el entorno de desarrollo
+info/

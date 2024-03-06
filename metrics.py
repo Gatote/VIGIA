@@ -4,6 +4,8 @@ from datetime import datetime
 from ultralytics import YOLO
 from sort import Sort
 import csv
+import os
+import uuid
 
 BLUE_LINE = [(450, 350), (850, 350)]
 GREEN_LINE = [(400, 400), (900, 400)]
@@ -14,12 +16,15 @@ cross_green_line = {}
 cross_red_line = {}
 
 avg_speeds = {}
+vehicle_names = {}
 
 VIDEO_FPS = 20
 FACTOR_KM = 3.6
 LATENCY_FPS = 7
 
-CSV_FILE = "speed_data.csv"
+CSV_FILE = "info/speed_data.csv"
+IMAGE_FOLDER = "images"
+VIDEO_FOLDER = "videos"
 
 def write_to_csv(data):
     with open(CSV_FILE, mode='a') as file:
@@ -43,22 +48,38 @@ def calculate_avg_speed(track_id):
 
     return round((speed_bg + speed_gr) / 2, 2)
 
+def save_image(frame, vehicle_id):
+    if not os.path.exists(IMAGE_FOLDER):
+        os.makedirs(IMAGE_FOLDER)
+
+    image_name = f"{vehicle_id}_{uuid.uuid4()}.jpg"
+    image_path = os.path.join(IMAGE_FOLDER, image_name)
+    cv2.imwrite(image_path, frame)
+    return image_name
+
 if __name__ == '__main__':
-    cap = cv2.VideoCapture("traffic3.mp4")
+    cap = cv2.VideoCapture("films/traffic4.mp4")
 
     model = YOLO("yolov8n.pt")
 
     tracker = Sort()
 
+    if not os.path.exists(IMAGE_FOLDER):
+        os.makedirs(IMAGE_FOLDER)
+
     with open(CSV_FILE, mode='w') as file:
         writer = csv.writer(file)
-        writer.writerow(['Vehicle ID', 'Speed (Km/h)'])
+        writer.writerow(['Vehicle Name', 'Vehicle ID', 'Speed (Km/h)', 'Image Name'])
 
+    start_time = None
     while cap.isOpened():
         status, frame = cap.read()
 
         if not status:
             break
+
+        if start_time is None:
+            start_time = datetime.now()
 
         results = model(frame, stream=True)
 
@@ -73,6 +94,9 @@ if __name__ == '__main__':
 
             for xmin, ymin, xmax, ymax, track_id in tracks:
                 xc, yc = int((xmin + xmax) / 2), ymax
+
+                if track_id not in vehicle_names:
+                    vehicle_names[track_id] = f"Vehicle_{track_id}"
 
                 if track_id not in cross_blue_line:
                     cross_blue = (BLUE_LINE[1][0] - BLUE_LINE[0][0]) * (yc - BLUE_LINE[0][1]) - (BLUE_LINE[1][1] - BLUE_LINE[0][1]) * (xc - BLUE_LINE[0][0])
@@ -90,13 +114,20 @@ if __name__ == '__main__':
                         cross_red_line[track_id] = {"time": datetime.now(), "point": (xc, yc)}
                         avg_speed = calculate_avg_speed(track_id)
                         avg_speeds[track_id] = f"{avg_speed} Km/h"
-                        data_to_write.append([track_id, avg_speed])
+                        data_to_write.append([vehicle_names[track_id], track_id, avg_speed])
 
                 if track_id in avg_speeds:
-                    cv2.putText(img=frame, text=f"ID: {track_id}, Speed: {avg_speeds[track_id]}", org=(xmin, ymin - 10), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0, 255, 0), thickness=2)
+                    cv2.putText(img=frame, text=f"Name: {vehicle_names[track_id]}, Speed: {avg_speeds[track_id]}", org=(xmin, ymin - 10), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0, 255, 0), thickness=2)
 
                 cv2.circle(img=frame, center=(xc, yc), radius=5, color=(0, 255, 0), thickness=-1)
                 cv2.rectangle(img=frame, pt1=(xmin, ymin), pt2=(xmax, ymax), color=(255, 255, 0), thickness=2)
+
+                if track_id in vehicle_names:
+                    elapsed_time = datetime.now() - start_time
+                    video_name = os.path.join(VIDEO_FOLDER, f"{vehicle_names[track_id]}_{elapsed_time.total_seconds():.2f}.avi")
+                    vehicle_video = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'XVID'), VIDEO_FPS, (frame.shape[1], frame.shape[0]))
+                    vehicle_video.write(frame)
+                    vehicle_video.release()
 
         write_to_csv(data_to_write)
 
@@ -110,3 +141,5 @@ if __name__ == '__main__':
             break
 
     cap.release()
+
+    merge_videos(VIDEO_FOLDER)

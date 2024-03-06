@@ -121,12 +121,6 @@ if __name__ == '__main__':
                 cv2.circle(img=frame, center=(xc, yc), radius=5, color=(0, 255, 0), thickness=-1)
                 cv2.rectangle(img=frame, pt1=(xmin, ymin), pt2=(xmax, ymax), color=(255, 255, 0), thickness=2)
 
-                if track_id in vehicle_names:
-                    elapsed_time = datetime.now() - start_time
-                    video_name = os.path.join(VIDEO_FOLDER, f"{vehicle_names[track_id]}_{elapsed_time.total_seconds():.2f}.avi")
-                    vehicle_video = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'XVID'), VIDEO_FPS, (frame.shape[1], frame.shape[0]))
-                    vehicle_video.write(frame)
-                    vehicle_video.release()
 
         write_to_csv(data_to_write)
 

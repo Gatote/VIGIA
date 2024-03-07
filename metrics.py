@@ -3,7 +3,6 @@ import numpy as np
 import base64
 import csv
 import os
-import uuid
 from datetime import datetime
 from ultralytics import YOLO
 from sort import Sort
@@ -68,6 +67,8 @@ if __name__ == '__main__':
         writer.writerow(['Vehicle Name', 'Vehicle ID', 'Speed (Km/h)', 'Image'])
 
     start_time = None
+    vehicles_on_red_line = {}  # Dictionary to store vehicles currently on the red line
+
     while cap.isOpened():
         status, frame = cap.read()
 
@@ -82,14 +83,14 @@ if __name__ == '__main__':
         data_to_write = []
 
         for res in results:
-            filtered_indices = np.where((np.isin(res.boxes.cls.cpu().numpy(), [2, 3, 5, 2])) & (res.boxes.conf.cpu().numpy() > 0.3))[0]
+            filtered_indices = np.where((np.isin(res.boxes.cls.cpu().numpy(), [2, 3, 5, 7])) & (res.boxes.conf.cpu().numpy() > 0.3))[0]
             boxes = res.boxes.xyxy.cpu().numpy()[filtered_indices].astype(int)
 
             tracks = tracker.update(boxes)
             tracks = tracks.astype(int)
 
             for xmin, ymin, xmax, ymax, track_id in tracks:
-                xc, yc = int((xmin + xmax) / 2), ymax
+                xc, yc = int((xmin + xmax) / 2), int((ymin + ymax) / 2)  # Calculate centroid of bounding box
 
                 if track_id not in vehicle_names:
                     vehicle_names[track_id] = f"Vehicle_{track_id}"
@@ -112,9 +113,37 @@ if __name__ == '__main__':
                         avg_speeds[track_id] = f"{avg_speed} Km/h"
                         data_to_write.append([vehicle_names[track_id], track_id, avg_speed, save_image(frame, track_id)])
 
+                        # Store the vehicle info if it's on the red line
+                        vehicles_on_red_line[track_id] = {
+                            "name": vehicle_names[track_id],
+                            "speed": avg_speed,
+                            "position": (xc, yc)  # Store the centroid position of the vehicle
+                        }
+
                 cv2.rectangle(img=frame, pt1=(xmin, ymin), pt2=(xmax, ymax), color=(255, 255, 0), thickness=2)
+
+                # Draw vehicle info on the red line
+                if track_id in vehicles_on_red_line:
+                    cv2.putText(frame, f"{vehicle_names[track_id]}: {avg_speeds[track_id]}", (xmin, ymin-10), cv2.FONT_HERSHEY_PLAIN, 1, (0,255,0), 2)
+                    # Draw arrow to follow the vehicle
+                    if track_id in cross_red_line:
+                        next_x, next_y = cross_red_line[track_id]['point']
+                        cv2.arrowedLine(frame, (xc, yc), (next_x, next_y), (0, 0, 255), 2)
 
         for data in data_to_write:
             write_to_csv(data)
 
+        cv2.imshow("Frame", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        # Reset the start time if the vehicle crosses the red line
+        if cross_red_line:
+            start_time = datetime.now()
+
+        # Check if 3 seconds have passed since the vehicle crossed the red line
+        if start_time and (datetime.now() - start_time).total_seconds() >= 3:
+            vehicles_on_red_line.clear()
+
     cap.release()
+    cv2.destroyAllWindows()

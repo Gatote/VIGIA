@@ -1,13 +1,8 @@
 import cv2
-import time
 import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from sort import Sort
-
-# BLUE_LINE = [(320, 190), (600, 190)]
-# GREEN_LINE = [(270, 220), (580, 220)]
-# RED_LINE = [(220, 250), (560, 250)]
 
 BLUE_LINE = [(450, 350), (850, 350)]
 GREEN_LINE = [(400, 400), (900, 400)]
@@ -67,7 +62,7 @@ if __name__ == '__main__':
 
             for xmin, ymin, xmax, ymax, track_id in tracks:
                 # Get buttom center of bbox
-                xc, yc = int((xmin + xmax) / 2), ymax
+                xc, yc = int((xmin + xmax) / 2), int((ymin + ymax) / 2)
 
                 if track_id not in cross_blue_line:
                     cross_blue = (BLUE_LINE[1][0] - BLUE_LINE[0][0]) * (yc - BLUE_LINE[0][1]) - (BLUE_LINE[1][1] - BLUE_LINE[0][1]) * (xc - BLUE_LINE[0][0])
